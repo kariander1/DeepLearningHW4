@@ -51,7 +51,7 @@ class Episode(object):
     def __repr__(self):
         return (
             f"Episode(total_reward={self.total_reward:.2f}, "
-            f"#experences={len(self.experiences)})"
+            f"#experiences={len(self.experiences)})"
         )
 
 

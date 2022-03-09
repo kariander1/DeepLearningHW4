@@ -20,7 +20,16 @@ class Discriminator(nn.Module):
         #  You can then use either an affine layer or another conv layer to
         #  flatten the features.
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        modules = []
+        in_channels = in_size[0]
+        act = torch.nn.LeakyReLU(0.1)
+        mod_channels = [in_channels, 128, 256,512,1024, 1]
+        for i_channel in range(1, len(mod_channels)):
+            modules += [nn.Conv2d(in_channels=mod_channels[i_channel - 1], out_channels=mod_channels[i_channel],
+                                  stride=2, kernel_size=5, padding=1), act,nn.BatchNorm2d(mod_channels[i_channel])]
+
+        modules.pop() # remove last batch norm
+        self.cnn = nn.Sequential(*modules)
         # ========================
 
     def forward(self, x):
@@ -33,7 +42,8 @@ class Discriminator(nn.Module):
         #  No need to apply sigmoid to obtain probability - we'll combine it
         #  with the loss due to improved numerical stability.
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        h = self.cnn(x)
+        y = torch.flatten(h,1)
         # ========================
         return y
 
@@ -54,7 +64,20 @@ class Generator(nn.Module):
         #  section or implement something new.
         #  You can assume a fixed image size.
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        self.featuremap_size = featuremap_size
+        modules = []
+
+        act = torch.nn.ReLU()
+        #in_channels = z_dim//(featuremap_size**2)
+        in_channels = z_dim
+        mod_channels = [in_channels,1024, 512, 256, 128,64, out_channels]
+        for i_channel in range(1, len(mod_channels)):
+            modules += [nn.ConvTranspose2d(in_channels=mod_channels[i_channel - 1], out_channels=mod_channels[i_channel],
+                                  stride=2, kernel_size=4, padding=1), act, nn.BatchNorm2d(mod_channels[i_channel])]
+
+        modules.pop()  # Remove last batch norm
+        modules[-1] = nn.Tanh() # Replace last activation
+        self.cnn = nn.Sequential(*modules)
         # ========================
 
     def sample(self, n, with_grad=False):
@@ -71,7 +94,9 @@ class Generator(nn.Module):
         #  Generate n latent space samples and return their reconstructions.
         #  Don't use a loop.
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        with torch.set_grad_enabled(with_grad):
+            normal = torch.randn(n,self.z_dim).to(device)
+            samples = self(normal)
         # ========================
         return samples
 
@@ -85,7 +110,10 @@ class Generator(nn.Module):
         #  Don't forget to make sure the output instances have the same
         #  dynamic range as the original (real) images.
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        fm_size = self.featuremap_size
+        # h = torch.reshape(z, shape=(-1, self.z_dim // (fm_size ** 2), fm_size, fm_size))
+        h = z.view(-1, self.z_dim, 1, 1).to(next(self.parameters()).device)
+        x = self.cnn(h)
         # ========================
         return x
 
@@ -111,7 +139,12 @@ def discriminator_loss_fn(y_data, y_generated, data_label=0, label_noise=0.0):
     #  generated labels.
     #  See pytorch's BCEWithLogitsLoss for a numerically stable implementation.
     # ====== YOUR CODE: ======
-    raise NotImplementedError()
+    loss_fn = nn.BCEWithLogitsLoss()
+    data_noise = ((torch.rand(y_data.shape) - 0.5) * label_noise).to(y_data.device)
+    generated_noise = ((torch.rand(y_generated.shape) - 0.5) * label_noise).to(y_generated.device)
+
+    loss_data = loss_fn(y_data,data_label+ data_noise)
+    loss_generated = loss_fn(y_generated, 1-data_label+generated_noise)
     # ========================
     return loss_data + loss_generated
 
@@ -132,7 +165,9 @@ def generator_loss_fn(y_generated, data_label=0):
     #  Think about what you need to compare the input to, in order to
     #  formulate the loss in terms of Binary Cross Entropy.
     # ====== YOUR CODE: ======
-    raise NotImplementedError()
+    loss_fn = nn.BCEWithLogitsLoss()
+    labels = torch.full(size=y_generated.shape, fill_value=data_label,dtype=torch.float).to(y_generated.device)
+    loss = loss_fn(y_generated, labels)
     # ========================
     return loss
 
@@ -157,7 +192,19 @@ def train_batch(
     #  2. Calculate discriminator loss
     #  3. Update discriminator parameters
     # ====== YOUR CODE: ======
-    raise NotImplementedError()
+
+    # 1.
+    x_generated = gen_model.sample(x_data.shape[0])
+    y_data = dsc_model(x_data)
+    y_generated = dsc_model(x_generated)
+
+    # 2.
+    dsc_loss = dsc_loss_fn(y_data,y_generated)
+
+    # 3.
+    dsc_optimizer.zero_grad()
+    dsc_loss.backward(retain_graph=True)
+    dsc_optimizer.step()
     # ========================
 
     # TODO: Generator update
@@ -165,7 +212,18 @@ def train_batch(
     #  2. Calculate generator loss
     #  3. Update generator parameters
     # ====== YOUR CODE: ======
-    raise NotImplementedError()
+
+    # 1.
+    gen_x_generated = gen_model.sample(x_data.shape[0],with_grad=True)
+    gen_y_generated = dsc_model(gen_x_generated)
+
+    # 2.
+    gen_loss = gen_loss_fn(gen_y_generated)
+
+    # 3.
+    gen_optimizer.zero_grad()
+    gen_loss.backward()
+    gen_optimizer.step()
     # ========================
 
     return dsc_loss.item(), gen_loss.item()
@@ -188,8 +246,11 @@ def save_checkpoint(gen_model, dsc_losses, gen_losses, checkpoint_file):
     #  You should decide what logic to use for deciding when to save.
     #  If you save, set saved to True.
     # ====== YOUR CODE: ======
-
-    raise NotImplementedError()
+    mean = sum(dsc_losses) / len(dsc_losses)
+    dsc_var = sum((i - mean) ** 2 for i in dsc_losses) / len(dsc_losses)
+    print(dsc_var)
+    torch.save(gen_model, checkpoint_file)
+    saved = True
     # ========================
 
     return saved

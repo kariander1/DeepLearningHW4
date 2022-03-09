@@ -313,7 +313,15 @@ class ActionEntropyLoss(nn.Module):
         #   - Use pytorch built-in softmax and log_softmax.
         #   - Calculate loss per experience and average over all of them.
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+
+        # Calc Pi:
+        proba = torch.softmax(action_scores, dim=1)
+
+        # Calc Log Pi:
+        log_proba = torch.log_softmax(action_scores, dim=1)
+
+        row_entropy = torch.sum(proba * log_proba, dim=1)
+        loss_e = torch.mean(row_entropy) / self.max_entropy
         # ========================
 
         loss_e *= self.beta
@@ -460,7 +468,24 @@ class PolicyTrainer(object):
         #   - Backprop.
         #   - Update model parameters.
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        #   - Forward pass
+        y_hat = self.model(batch.states)
+
+        #   - Calculate loss with each loss function. Sum the losses and
+        #     Combine the dict returned from each loss function into the
+        #     losses_dict variable (use dict.update()).
+
+        total_loss = 0
+        for loss_fnc in self.loss_functions:
+            loss, loss_dict = loss_fnc(batch, y_hat)
+            total_loss += loss
+            losses_dict.update(loss_dict)
+
+        #   - Backprop.
+        self.optimizer.zero_grad()
+        total_loss.backward()
+        #   - Update model parameters.
+        self.optimizer.step()
         # ========================
 
         return total_loss, losses_dict

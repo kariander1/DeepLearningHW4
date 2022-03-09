@@ -82,7 +82,18 @@ class Trainer(abc.ABC):
             #  - Use the train/test_epoch methods.
             #  - Save losses and accuracies in the lists above.
             # ====== YOUR CODE: ======
-            raise NotImplementedError()
+            actual_num_epochs += 1
+            train_result = self.train_epoch(dl_train, verbose=verbose, **kw)
+            train_accuracy = train_result.accuracy
+            train_losses = train_result.losses
+            train_acc.append(train_accuracy)
+            train_loss.append(sum(train_losses) / len(train_losses))
+
+            test_result = self.test_epoch(dl_test, verbose=verbose, **kw)
+            test_accuracy = test_result.accuracy
+            test_losses = test_result.losses
+            test_acc.append(test_accuracy)
+            test_loss.append(sum(test_losses) / len(test_losses))
             # ========================
 
             # TODO:
@@ -93,11 +104,20 @@ class Trainer(abc.ABC):
             #    the checkpoints argument.
             if best_acc is None or test_result.accuracy > best_acc:
                 # ====== YOUR CODE: ======
-                raise NotImplementedError()
+                # There is improvement
+                epochs_without_improvement = 0
+                if checkpoints:
+                    checkpoints_path = os.path.dirname(checkpoints)
+                    if not os.path.isdir(checkpoints_path):
+                        os.mkdir(checkpoints_path)
+                    self.save_checkpoint(checkpoints+'.pt')
+                best_acc = test_accuracy
                 # ========================
             else:
                 # ====== YOUR CODE: ======
-                raise NotImplementedError()
+                epochs_without_improvement += 1
+                if early_stopping and epochs_without_improvement is early_stopping:
+                    break
                 # ========================
 
             if post_epoch_fn:
@@ -213,7 +233,7 @@ class Trainer(abc.ABC):
             pbar.set_description(
                 f"{pbar_name} "
                 f"(Avg. Loss {avg_loss:.3f}, "
-                f"Accuracy {accuracy:.1f})"
+                f"Accuracy {accuracy:.6f})"
             )
 
         if not verbose:
@@ -246,7 +266,12 @@ class VAETrainer(Trainer):
         x = x.to(self.device)  # Image batch (N,C,H,W)
         # TODO: Train a VAE on one batch.
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        x_rec, z_mu, z_log_sigma2 = self.model(x)
+        loss, data_loss, kldiv_loss = self.loss_fn(x, x_rec, z_mu, z_log_sigma2)
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
         # ========================
 
         return BatchResult(loss.item(), 1 / data_loss.item())
@@ -258,7 +283,8 @@ class VAETrainer(Trainer):
         with torch.no_grad():
             # TODO: Evaluate a VAE on one batch.
             # ====== YOUR CODE: ======
-            raise NotImplementedError()
+            x_rec, z_mu, z_log_sigma2 = self.model(x)
+            loss, data_loss, _ = self.loss_fn(x, x_rec, z_mu, z_log_sigma2)
             # ========================
 
         return BatchResult(loss.item(), 1 / data_loss.item())
