@@ -53,7 +53,7 @@ def download_data(out_path, url, extract=True, force=False):
                     if not is_within_directory(path, member_path):
                         raise Exception("Attempted Path Traversal in Tar File")
             
-                tar.extractall(path, members, numeric_owner) 
+                tar.extractall(path, members, numeric_owner=numeric_owner) 
                 
             
             safe_extract(tarf, out_path)
